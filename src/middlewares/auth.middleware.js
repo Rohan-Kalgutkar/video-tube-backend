@@ -1,5 +1,5 @@
-import asyncHandler from "../utils/asyncHandler";
-import { apiError } from "../utils/apiError";
+import asyncHandler from "../utils/asyncHandler.js";
+import { apiError } from "../utils/apiError.js";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.models.js";
 
@@ -8,6 +8,8 @@ export const verifyJWT=asyncHandler(async (req, _, next) =>{
 
     try {
         const token=req.cookies?.accessToken || req.header("Authrization")?.replace("Bearer ", "");
+
+        console.log("Token:", token);
     
         if(!token) {
             throw new apiError(401, " Unauthorized request.Access token is required");

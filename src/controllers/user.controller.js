@@ -164,10 +164,17 @@ const loginUser=asyncHandler(async (req, res) => {
   // Send these token in response as cookies(secure cookies) to user
 
   const { email, username, password } = req.body;
+  console.log(email);
 
-  if(!username || !email) {
+  if(!username && !email) {
     throw new apiError(400, "Email or username is required");
   }
+
+  //Alternative to above code:
+
+  // if(!(username || email)){
+  //   throw new apiError(400, "Email or username is required");
+  // }
 
   const user= await User.findOne({
     $or: [
@@ -175,7 +182,7 @@ const loginUser=asyncHandler(async (req, res) => {
       {email}
     ],
 
-  })
+  }).select("+password");
 
   if(!user) {
     throw new apiError(401, "Invalid username or email");
