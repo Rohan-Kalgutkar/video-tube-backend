@@ -7,6 +7,8 @@ import { uploadonCloudinary } from "../utils/cloudinary.js";
 
 import { apiResponse } from "../utils/apiResponse.js";
 
+import jwt from "jsonwebtoken";
+
 const generateAccessAndResfreshTokens= async (userID) =>{
   try {
 
@@ -262,8 +264,75 @@ const logoutUser=asyncHandler(async (req, res) => {
 
 });
 
+
+const refreshAccessToken= asyncHandler(async(req,res)=>{
+
+  // ToDo
+  // Get the refresh token from cookies
+  // Verify the refresh token
+  // Generate new access token
+  // Send the new access token in response
+
+
+  const incomingRefreshToken=req.cookies.refreshToken || req.body.refreshToken || 
+  req.header("Authorization")?.replace("Bearer ", "");
+
+  if(!incomingRefreshToken) {
+    throw new apiError(401, "Unauthorized request. Refresh token is required");
+  }
+
+  try {
+    const decodedToken=jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET,
+    )
+  
+    const user=await User.findById(decodedToken?._id)
+  
+    if(!user) {
+      throw new apiError(401, "Invalid refresh token. User not found");
+    }
+  
+    if(incomingRefreshToken!== user?.refreshToken) {
+      throw new apiError(401, "Refresh Token is expired or invalid. Please login again");
+    }
+  
+    const options={
+      httpOnly: true,
+      secure: true, // Set secure flag in production
+      // sameSite: "Strict", // Adjust as per your requirements
+  
+    }
+  
+    const {newAccessToken,newRefreshToken}=await user.generateAccessToken(user._id);
+  
+  
+    return res
+    .status(200)
+    .cookie("accessToken", newAccessToken, options)
+    .cookie("refreshToken", newRefreshToken, options)
+    .json(
+      new apiResponse(
+        200, 
+        {
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken
+        }, 
+        "Access token refreshed successfully"
+      )
+    )
+  
+  } catch (error) {
+    console.error("Error refreshing access token:", error);
+    throw new apiError(401, "Invalid refresh token. Please login again");
+    
+  }
+
+})
+
 export { 
   registerUser,
   loginUser,
-  logoutUser
+  logoutUser,
+  refreshAccessToken
 };
