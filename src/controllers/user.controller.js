@@ -403,17 +403,29 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     throw new apiError(400, "Full name and email are required");
   }
 
-  const user = User.findByIdAndUpdate(
+  //Check if new email already exists
+
+  const emailExist = await User.findOne({
+    email,
+    _id: { $ne: req.user._id },
+  });
+
+  if(emailExist){
+    throw new apiError(400,"Email is already in use by another account")
+
+  }
+
+  const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
         fullName,
-        email: email,
+        email,
       },
     },
     {
       new: true,
-      // runValidators: true,
+      runValidators: true,
     }
   ).select("-password");
 
