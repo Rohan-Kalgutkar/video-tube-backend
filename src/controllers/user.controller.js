@@ -347,11 +347,14 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 
   const { currentPassword, newPassword, confPassword } = req.body;
 
-  if (!(newPassword === confPassword)) {
+  console.log("New Password:", newPassword);
+  console.log("Confirm Password:", confPassword);
+
+  if (newPassword.trim() !== confPassword.trim()) {
     throw new apiError(400, "New password and confirm password do not match");
   }
 
-  const user = await User.findById(req.user._id);
+  const user = await User.findById(req.user._id).select("+password");
 
   const isPasswordCorrect = await user.isPasswordCorrect(currentPassword);
 
