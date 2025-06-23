@@ -247,6 +247,8 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   // Generate new access token
   // Send the new access token in response
 
+  //Step1: Get refresh token from various sources/cookies
+
   const incomingRefreshToken =
     req.cookies.refreshToken ||
     req.body.refreshToken ||
@@ -257,17 +259,21 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   }
 
   try {
+    //Step2: Verify the refresh token
     const decodedToken = jwt.verify(
       incomingRefreshToken,
       process.env.REFRESH_TOKEN_SECRET
     );
 
-    const user = await User.findById(decodedToken?._id);
+    //Step3 : Get user from Db and include refreshToken explicitly
+
+    const user = await User.findById(decodedToken?._id).select("+refreshToken");
 
     if (!user) {
       throw new apiError(401, "Invalid refresh token. User not found");
     }
 
+    //Step4: Check if token matches stored one
     if (incomingRefreshToken !== user?.refreshToken) {
       throw new apiError(
         401,
@@ -275,15 +281,37 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       );
     }
 
+    // const options = {
+    //   httpOnly: true,
+    //   secure: true, // Set secure flag in production
+    //   // sameSite: "Strict", // Adjust as per your requirements
+    // };
+
+    // const { newAccessToken, newRefreshToken } = await user.generateAccessToken(
+    //   user._id
+    // );
+
+    //Debugged Code:
+
+    //Step5: Generate new token
+
+    const newAccessToken = user.generateAccessToken();
+    const newRefreshToken = user.generateRefreshToken();
+
+    //Step6: Save the new refreshToken in DB
+
+    user.refreshToken = newRefreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    //Step7: Set cookies
+
     const options = {
       httpOnly: true,
-      secure: true, // Set secure flag in production
-      // sameSite: "Strict", // Adjust as per your requirements
+      secure: true,
     };
 
-    const { newAccessToken, newRefreshToken } = await user.generateAccessToken(
-      user._id
-    );
+    console.log("✅ Refreshed Access Token:", newAccessToken);
+    console.log("🔁 Refreshed Refresh Token:", newRefreshToken);
 
     return res
       .status(200)
@@ -589,7 +617,15 @@ const getWatchHistory = asyncHandler(async (req, res) => {
     },
   ]);
 
-  return res.status(200).json(new apiResponse(200, user[0].watchHistory, "Watch History Fetched successfully"));
+  return res
+    .status(200)
+    .json(
+      new apiResponse(
+        200,
+        user[0].watchHistory,
+        "Watch History Fetched successfully"
+      )
+    );
 });
 
 export {
