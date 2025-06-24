@@ -3,7 +3,10 @@ import { apiError } from "../utils/apiError.js";
 
 import { User } from "../models/user.models.js";
 
-import { uploadonCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
+import {
+  uploadonCloudinary,
+  deleteFromCloudinary,
+} from "../utils/cloudinary.js";
 
 import { apiResponse } from "../utils/apiResponse.js";
 
@@ -483,14 +486,16 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 
   if (oldAvatarId) {
     try {
-      console.log("Attempting to delete old avatar from Cloudinary:", oldAvatarId);
+      console.log(
+        "Attempting to delete old avatar from Cloudinary:",
+        oldAvatarId
+      );
       const result = await deleteFromCloudinary(oldAvatarId);
       console.log("Cloudinary destroy result:", result);
     } catch (err) {
       console.error("Failed to delete old avatar:", err.message);
     }
   }
-  
 
   //Step5: Update avatar in DB using $set
 
@@ -524,23 +529,47 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
   //Save the user object
   //Send response
 
+  //Step1: Check if cover image present
   const coverImageLocalPath = req.file?.path;
 
   if (!coverImageLocalPath) {
     throw new apiError(400, "Cover image file is required");
   }
 
-  const coverImageUrl = await uploadonCloudinary(coverImageLocalPath);
+  //Step2: Find user
+  const user = await User.findById(req.user?._id);
+  if (!user) {
+    throw new apiError(404, "User not found");
+  }
 
-  if (!coverImageUrl) {
+  //Step3: Upload new cover image
+
+  const newCoverImageData = await uploadonCloudinary(coverImageLocalPath);
+
+  if (!newCoverImageData) {
     throw new apiError(500, "Failed to upload cover image");
   }
 
-  const user = await User.findByIdAndUpdate(
+  // Step 4: Delete the old cover image from Cloudinary, if it exists
+  const oldCoverImageId = user.coverImage?.public_id;
+  if (oldCoverImageId) {
+    try {
+      console.log(
+        "Attempting to delete old cover image from Cloudinary:",
+        oldCoverImageId
+      );
+      const result = await deleteFromCloudinary(oldCoverImageId);
+      console.log("Cloudinary destroy result:", result);
+    } catch (err) {
+      console.error("Failed to delete old cover image:", err.message);
+    }
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
-        coverImage: coverImageUrl,
+        coverImage: newCoverImageData,
       },
     },
     {
@@ -550,7 +579,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new apiResponse(200, user, "User cover image updated successfully"));
+    .json(new apiResponse(200, updatedUser, "User cover image updated successfully"));
 });
 
 const getUserChannelProfile = asyncHandler(async (req, res) => {
