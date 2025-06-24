@@ -28,7 +28,10 @@ const uploadonCloudinary = async (localFilePath) => {
     // Remove the locally saved temporary file after successful upload
     fs.unlinkSync(localFilePath);
 
-    return response.url; // Return the secure URL of the uploaded image
+    return {
+      url: response.secure_url,
+      public_id: response.public_id
+    }; // Return the secure URL and pub_id of the uploaded image
   } catch (error) {
     // fs.unlinkSync(localFilePath); // Remove the locally saved temporary file as the upload operation failed
     // return null; // Return null to indicate failure
@@ -46,4 +49,19 @@ const uploadonCloudinary = async (localFilePath) => {
   }
 };
 
-export { uploadonCloudinary };
+const deleteFromCloudinary = async (public_id) => {
+  try {
+    if (!public_id) {
+      throw new Error("No public_id provided for deletion.");
+    }
+
+    const result = await cloudinary.uploader.destroy(public_id);
+    console.log("Cloudinary destroy result:", result);
+    return result;
+  } catch (error) {
+    console.error("Error deleting from Cloudinary:", error.message);
+    return null;
+  }
+};
+
+export { uploadonCloudinary, deleteFromCloudinary };

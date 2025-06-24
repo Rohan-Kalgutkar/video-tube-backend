@@ -3,7 +3,7 @@ import { apiError } from "../utils/apiError.js";
 
 import { User } from "../models/user.models.js";
 
-import { uploadonCloudinary } from "../utils/cloudinary.js";
+import { uploadonCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 
 import { apiResponse } from "../utils/apiResponse.js";
 
@@ -106,11 +106,17 @@ const registerUser = asyncHandler(async (req, res) => {
 
   // Upload avatar image to Cloudinary
 
-  const avatarUrl = await uploadonCloudinary(avatarLocalPath);
+  // const avatarUrl = await uploadonCloudinary(avatarLocalPath);
+
+  const avatarData = await uploadonCloudinary(avatarLocalPath);
 
   const coverImageUrl = await uploadonCloudinary(coverImageLocalPath);
 
-  if (!avatarUrl) {
+  // if (!avatarUrl) {
+  //   throw new apiError(500, "Failed to upload avatar image");
+  // }
+
+  if (!avatarData) {
     throw new apiError(500, "Failed to upload avatar image");
   }
 
@@ -118,7 +124,9 @@ const registerUser = asyncHandler(async (req, res) => {
 
   const user = await User.create({
     fullName,
-    avatar: avatarUrl, // This will be the URL returned by Cloudinary
+    // avatar: avatarUrl, // This will be the URL returned by Cloudinary
+    avatar: avatarData, // Now storing { url, public_id }
+
     coverImage: coverImageUrl || "", ///This way written becuase there was no strick check on coverimage like Avatar thats why if not there replace wiht null
     email,
     password,
@@ -410,9 +418,8 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
     _id: { $ne: req.user._id },
   });
 
-  if(emailExist){
-    throw new apiError(400,"Email is already in use by another account")
-
+  if (emailExist) {
+    throw new apiError(400, "Email is already in use by another account");
   }
 
   const user = await User.findByIdAndUpdate(
@@ -443,25 +450,55 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   //Save the user object
   //Send response
 
+  //Step1: Check if avatar image is present
   const avatarLocalPath = req.file?.path;
 
   if (!avatarLocalPath) {
     throw new apiError(400, "Avatar image is required");
   }
 
-  //ToDO: delete old image to be done after research
+  //ToDO: delete old image to be done after research: Update Done
 
-  const avatarUrl = await uploadonCloudinary(avatarLocalPath);
+  //Step2: Find user
 
-  if (!avatarUrl) {
+  const user = await User.findById(req.user?._id);
+
+  if (!user) {
+    throw new apiError(404, "User not found");
+  }
+
+  //Step3: Upload new avatar to Cloudinary
+
+  const newAvatarData = await uploadonCloudinary(avatarLocalPath);
+
+  if (!newAvatarData) {
     throw new apiError(500, "Failed to upload avatar image");
   }
 
-  const user = await User.findByIdAndUpdate(
+  //Step4: Delete old avatar from Cloudinary, if public_id exists
+  const oldAvatarId = user.avatar?.public_id;
+
+  console.log("Old avatar object:", user.avatar);
+  console.log("Old public_id to delete:", oldAvatarId);
+
+  if (oldAvatarId) {
+    try {
+      console.log("Attempting to delete old avatar from Cloudinary:", oldAvatarId);
+      const result = await deleteFromCloudinary(oldAvatarId);
+      console.log("Cloudinary destroy result:", result);
+    } catch (err) {
+      console.error("Failed to delete old avatar:", err.message);
+    }
+  }
+  
+
+  //Step5: Update avatar in DB using $set
+
+  const updatedUser = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
-        avatar: avatarUrl,
+        avatar: newAvatarData,
       },
     },
     {
@@ -469,9 +506,13 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     }
   ).select("-password");
 
+  //Step6: Send repsonse
+
   return res
     .status(200)
-    .json(new apiResponse(200, user, "User avatar updated successfully"));
+    .json(
+      new apiResponse(200, updatedUser, "User avatar updated successfully")
+    );
 });
 
 const updateUserCoverImage = asyncHandler(async (req, res) => {
